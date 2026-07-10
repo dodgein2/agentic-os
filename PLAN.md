@@ -61,6 +61,7 @@ Goal: adding a capability is writing a file, not a project.
   - cost tracking (API spend per routine, monthly rollup in the digest)
   - migration runbook execution (site-by-site WP→static cutover as a supervised skill: mirror → deploy → verify → DNS flip with snapshot — each step confirm-gated)
   - social posting pipeline, client report generation, weekly business review
+  - **knowledge-base bridge** — give the agent read access to a scoped projection of your notes vault (Obsidian or similar) and a write path via an agent-inbox folder, so digests are context-aware and findings get filed back as notes. The canonical vault stays wherever it lives (e.g. iCloud); the agent works against a git-synced mirror of an allowlisted subset — never the whole vault, never direct writes to canonical files. See `docs/KNOWLEDGE-BRIDGE.md`.
 - [ ] Weekly self-review routine: agent reads its own audit log + failures, proposes routine/skill improvements as PRs to this repo.
 
 **Done when:** you've added two new capabilities without touching runner/bot/dashboard code.
