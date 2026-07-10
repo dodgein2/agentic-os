@@ -1,0 +1,17 @@
+# Real configuration — examples ship, reality doesn't
+config/*.yml
+!config/*.example.yml
+
+# Operator-private context, state, logs, secrets
+private/
+state/
+logs/
+.env
+*.pem
+*.key
+*.ppk
+
+# Runtime
+node_modules/
+__pycache__/
+.venv/

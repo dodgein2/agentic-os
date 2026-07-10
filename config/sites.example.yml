@@ -1,0 +1,18 @@
+# Copy to sites.yml (gitignored) and fill in your real sites.
+sites:
+  - domain: example.com
+    host: vps            # vps | shared | external
+    checks:
+      uptime: true
+      expect_content: "Welcome"   # string that must appear on /
+      ssl: true
+      form:
+        endpoint: /submit
+        expect_status: 200         # use the honest current status; 503 = known-degraded
+      playwright: true
+    deploy:                        # optional; enables "deploy <site>" command
+      repo: yourname/example-website
+      target: /var/www/example.com
+      post_deploy_smoke: true
+    dns_provider: hostinger        # which adapter manages DNS for this domain
+    notes: ""
