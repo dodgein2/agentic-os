@@ -179,6 +179,79 @@ def new_id(prefix: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# Budget enforcement
+# --------------------------------------------------------------------------
+
+def read_daily_budget(config_path: Path) -> float | None:
+    """Read systems.budgets.daily_usd from config/systems.yml, or None if unset/missing."""
+    if not config_path.exists():
+        return None
+    try:
+        data = yaml.safe_load(config_path.read_text()) or {}
+    except Exception:  # noqa: BLE001
+        return None
+    budgets = ((data.get("systems") or {}).get("budgets") or {})
+    daily = budgets.get("daily_usd")
+    if daily is None:
+        return None
+    try:
+        return float(daily)
+    except (TypeError, ValueError):
+        return None
+
+
+def sum_today_llm_spend(audit_path: Path, today_prefix: str) -> float:
+    """Sum today's (UTC) LLM spend from `claude -p` Run records in audit.jsonl.
+
+    Uses the record's `cost` field when present; otherwise falls back to the
+    routine's `budget_usd` (worst case) recorded in `params`.
+    """
+    if not audit_path.exists():
+        return 0.0
+    total = 0.0
+    try:
+        lines = audit_path.read_text().splitlines()
+    except Exception:  # noqa: BLE001
+        return 0.0
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("type") != "Run" or rec.get("tool") != "claude -p":
+            continue
+        ts = rec.get("ts") or ""
+        if not ts.startswith(today_prefix):
+            continue
+        cost = rec.get("cost")
+        if cost is None:
+            cost = (rec.get("params") or {}).get("budget_usd")
+        if cost is None:
+            continue
+        try:
+            total += float(cost)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def append_pending_alert(state_dir: Path, alert: dict[str, Any]) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    alerts_path = state_dir / "pending-alerts.json"
+    pending: list[Any] = []
+    if alerts_path.exists():
+        try:
+            pending = json.loads(alerts_path.read_text())
+        except Exception:  # noqa: BLE001
+            pending = []
+    pending.append(alert)
+    alerts_path.write_text(json.dumps(pending, indent=2))
+
+
+# --------------------------------------------------------------------------
 # LLM invocation
 # --------------------------------------------------------------------------
 
@@ -209,6 +282,7 @@ def build_claude_command(
 
     cmd += ["--output-format", "json"]
     cmd += ["--allowedTools", "Read"]
+    cmd += ["--max-turns", "3"]
 
     return cmd, prompt
 
@@ -256,6 +330,12 @@ def main() -> int:
         type=Path,
         default=REPO_ROOT / "logs",
         help="Override logs directory (for testing)",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=REPO_ROOT / "config" / "systems.yml",
+        help="Override systems config path (for testing)",
     )
     args = parser.parse_args()
 
@@ -317,22 +397,67 @@ def main() -> int:
     )
 
     llm_result: dict[str, Any] | None = None
+    budget_capped = False
     if llm_mode != "never" and (should_invoke_llm or args.dry_llm):
-        cmd, _prompt = build_claude_command(frontmatter, body, current_docs, previous_state)
-        if args.dry_llm:
-            print(" ".join(_shell_quote(c) for c in cmd))
-        elif should_invoke_llm:
-            llm_result = run_claude(cmd)
+        routine_budget_usd = frontmatter.get("budget_usd")
+        daily_usd = read_daily_budget(args.config)
+        if daily_usd is not None and routine_budget_usd is not None:
+            today_prefix = now_iso()[:10]  # YYYY-MM-DD (UTC)
+            today_spend = sum_today_llm_spend(audit_path, today_prefix)
+            if today_spend + float(routine_budget_usd) > daily_usd:
+                budget_capped = True
+
+        if budget_capped:
             append_audit(audit_path, {
                 "type": "Run",
                 "id": new_id("run"),
                 "task_id": task_id,
                 "routine": name,
                 "tool": "claude -p",
-                "params": {"model": frontmatter.get("model", "strong"), "budget_usd": frontmatter.get("budget_usd")},
-                "outcome": "failed" if llm_result and llm_result.get("error") else "ok",
+                "params": {"model": frontmatter.get("model", "strong"), "budget_usd": routine_budget_usd},
+                "outcome": "skipped_budget",
                 "ts": now_iso(),
             })
+            append_pending_alert(args.state_dir, {
+                "domain": "system",
+                "kind": "budget",
+                "status": "capped",
+                "detail": (
+                    f"routine '{name}' skipped LLM call: today's spend "
+                    f"(${today_spend:.2f}) + routine budget (${float(routine_budget_usd):.2f}) "
+                    f"would exceed daily cap (${daily_usd:.2f})"
+                ),
+                "routine": name,
+                "task_id": task_id,
+                "ts": now_iso(),
+            })
+            append_audit(audit_path, {
+                "type": "Event",
+                "id": new_id("evt"),
+                "routine": name,
+                "ts": now_iso(),
+                "note": "budget cap alert queued to state/pending-alerts.json",
+            })
+        else:
+            cmd, _prompt = build_claude_command(frontmatter, body, current_docs, previous_state)
+            if args.dry_llm:
+                print(" ".join(_shell_quote(c) for c in cmd))
+            elif should_invoke_llm:
+                llm_result = run_claude(cmd)
+                cost = None
+                if isinstance(llm_result, dict):
+                    cost = llm_result.get("total_cost_usd") or llm_result.get("cost_usd")
+                append_audit(audit_path, {
+                    "type": "Run",
+                    "id": new_id("run"),
+                    "task_id": task_id,
+                    "routine": name,
+                    "tool": "claude -p",
+                    "params": {"model": frontmatter.get("model", "strong"), "budget_usd": routine_budget_usd},
+                    "cost": cost,
+                    "outcome": "failed" if llm_result and llm_result.get("error") else "ok",
+                    "ts": now_iso(),
+                })
 
     # --- merge + write state ---------------------------------------------
     merged_state = {

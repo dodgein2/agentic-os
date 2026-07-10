@@ -104,10 +104,16 @@ for routine in "$ROUTINES_DIR"/*.md; do
     continue
   fi
 
-  log_file="$REPO_ROOT/logs/cron-$(basename "$routine" .md).log"
+  routine_id="$(basename "$routine" .md)"
+  log_file="$REPO_ROOT/logs/cron-$routine_id.log"
+  lock_file="/tmp/agentic-os-$routine_id.lock"
   # cron runs with an empty environment; source .env so claude -p and the bot
-  # get ANTHROPIC_API_KEY / TELEGRAM_* etc.
-  entry="$schedule cd $REPO_ROOT && set -a && [ -f .env ] && . ./.env; set +a; $PYTHON_BIN $RUNNER $routine >> $log_file 2>&1"
+  # get ANTHROPIC_API_KEY / TELEGRAM_* etc. Wrap the whole command in
+  # flock -n so a hung run can't stack overlapping invocations of the same
+  # routine; -n makes it skip (not queue) if a previous run is still holding
+  # the lock.
+  inner_cmd="cd $REPO_ROOT && set -a && [ -f .env ] && . ./.env; set +a; $PYTHON_BIN $RUNNER $routine >> $log_file 2>&1"
+  entry="$schedule flock -n $lock_file -c '$(printf '%s' "$inner_cmd" | sed "s/'/'\\\\''/g")'"
   new_entries="${new_entries}${entry}"$'\n'
 done
 
