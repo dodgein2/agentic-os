@@ -56,13 +56,12 @@ Goal: adding a capability is writing a file, not a project.
 - [ ] `skills/` — each skill is a markdown file (trigger, steps, adapters allowed, max risk tier, guardrails). The orchestrator loads them per run. Document the convention in `docs/SKILLS.md`.
 - [ ] **Bounded-growth rule:** a new skill or agent role is only justified if it changes at least one of: context loaded, tools/permissions granted, evidence required, evaluation rubric, or cost/latency budget. If none change, it's the same capability with a new name — don't add it. This is the guard against skill sprawl.
 - [ ] Skill-authoring skill: the agent can draft a new skill from a conversation ("learn how to check email deliverability"), you review the diff, merge it.
-- [ ] Candidate expansions (each is one skill + maybe one adapter):
-  - email infrastructure health (mailbox warmup, DMARC/SPF/DKIM checks, deliverability)
-  - business pipeline watchers (bid deadlines, CRM follow-ups, content calendar gaps)
-  - cost tracking (API spend per routine, monthly rollup in the digest)
-  - migration runbook execution (site-by-site WP→static cutover as a supervised skill: mirror → deploy → verify → DNS flip with snapshot — each step confirm-gated)
-  - social posting pipeline, client report generation, weekly business review
-  - **knowledge-base bridge** — give the agent read access to a scoped projection of your notes vault (Obsidian or similar) and a write path via an agent-inbox folder, so digests are context-aware and findings get filed back as notes. The canonical vault stays wherever it lives (e.g. iCloud); the agent works against a git-synced mirror of an allowlisted subset — never the whole vault, never direct writes to canonical files. See `docs/KNOWLEDGE-BRIDGE.md`.
+- [ ] Scoped candidate expansions (operator decision 2026-07-10 — this is a *personal ops* layer; business-ops automations belong to the standalone apps CB is building, NOT here):
+  - **Social posting** — Blotato pipeline, personal + Di-Hy lanes. Gated; hard-confirm before switching between personal and business accounts. (Tier 3)
+  - **Site deploys** — brand site, client sites, and the WP→static cutover runbook (mirror → deploy → verify → DNS flip with snapshot), each step confirm-gated over SSH to production. (Tier 3)
+  - **Second-brain explorer (READ ONLY)** — the agent reads a scoped, allowlisted projection of the Obsidian vault for context in digests/decisions. It is an *explorer, not a user*: no write-back, no agent-inbox, no edits to canonical notes. This narrows the original `docs/KNOWLEDGE-BRIDGE.md` design to the read/projection half only. (Tier 0)
+  - cost tracking (API spend per routine, monthly rollup in the digest) — safe, keep.
+- [ ] **Explicitly OUT of scope:** financial/tax anything (goes to CB's financial advisor, never the agent); Lunula bid pipeline, FastWill outreach, and other business-ops workflows (owned by the separate apps CB is building). The skill-candidate inventory (`private/PHASE4-BACKLOG.md`) catalogs these but they are deferred/excluded by design, not a backlog to burn down here.
 - [ ] Weekly self-review routine: agent reads its own audit log + failures, proposes routine/skill improvements as PRs to this repo.
 
 **Done when:** you've added two new capabilities without touching runner/bot/dashboard code.
