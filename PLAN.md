@@ -2,6 +2,9 @@
 
 Phased, each phase ships something usable on its own. Execute top to bottom; don't start a phase until the previous one has run reliably for a few days.
 
+## Core purpose (operator, 2026-07-10)
+The Agentic OS is **eyes into everything CB runs, plus a grounded knowledge base he can query and capture into** — from his phone, on the road. Ask "what's going on with <business>?" and get a *real* answer from CB's own data (vault + live monitoring state + business status), not a generic AI guess. Leave a note and it's captured for later. Everything else (monitoring, deploys, cost) exists to feed and protect that. Business-domain automation lives in the separate apps CB is building; this stays the thin personal-ops + query/capture layer.
+
 ## Phase 0 — Foundations (prerequisites, ~1 session)
 
 - [ ] **Centralize secrets.** All credentials the orchestrator needs live in a single `.env` (gitignored) or OS keychain; adapters read from env only. Rotate anything you suspect has leaked. The orchestrator never gets a credential it doesn't need.
@@ -57,11 +60,12 @@ Goal: adding a capability is writing a file, not a project.
 - [ ] **Bounded-growth rule:** a new skill or agent role is only justified if it changes at least one of: context loaded, tools/permissions granted, evidence required, evaluation rubric, or cost/latency budget. If none change, it's the same capability with a new name — don't add it. This is the guard against skill sprawl.
 - [ ] Skill-authoring skill: the agent can draft a new skill from a conversation ("learn how to check email deliverability"), you review the diff, merge it.
 - [ ] Scoped candidate expansions (operator decision 2026-07-10 — this is a *personal ops* layer; business-ops automations belong to the standalone apps CB is building, NOT here):
-  - **Social posting** — Blotato pipeline, personal + Di-Hy lanes. Gated; hard-confirm before switching between personal and business accounts. (Tier 3)
+  - **Grounded query + capture (THE CORE — see "Core purpose" above Phase 1).** On the road: ask "what's going on with <business>" via Telegram → a real answer grounded in CB's own data (vault + live monitoring state + business status), not generic model output. And leave a note → captured for triage later. This is the main event; Phase 2 conversational control is really *this*.
+  - **Second-brain: read + you-initiated capture.** Agent READS an allowlisted vault projection for context. CB can LEAVE A NOTE and the agent acts as scribe → drops it in a capture inbox (`_Inbox/Agent/`) for CB to file at his computer. The agent NEVER autonomously authors/edits canonical notes ("explorer, not user" = no freelancing into the brain; CB-dictated capture is fine). Read = Tier 0; capture = Tier 1.
   - **Site deploys** — brand site, client sites, and the WP→static cutover runbook (mirror → deploy → verify → DNS flip with snapshot), each step confirm-gated over SSH to production. (Tier 3)
-  - **Second-brain explorer (READ ONLY)** — the agent reads a scoped, allowlisted projection of the Obsidian vault for context in digests/decisions. It is an *explorer, not a user*: no write-back, no agent-inbox, no edits to canonical notes. This narrows the original `docs/KNOWLEDGE-BRIDGE.md` design to the read/projection half only. (Tier 0)
+  - **VPS split-trigger watch** — monitor the co-tenancy trigger from `/opt/VPS_COTENANTS.md` (sustained CPU >70%, disk >85%, or app revenue) and tell CB when he's approaching the point where he's decided to move content/hobby sites to a separate VPS. Turns his standing plan into a watched condition. (Tier 0)
   - cost tracking (API spend per routine, monthly rollup in the digest) — safe, keep.
-- [ ] **Explicitly OUT of scope:** financial/tax anything (goes to CB's financial advisor, never the agent); Lunula bid pipeline, FastWill outreach, and other business-ops workflows (owned by the separate apps CB is building). The skill-candidate inventory (`private/PHASE4-BACKLOG.md`) catalogs these but they are deferred/excluded by design, not a backlog to burn down here.
+- [ ] **Explicitly OUT of scope:** financial/tax anything (goes to CB's financial advisor, never the agent); **social posting** (now its own small app — DB + dashboard + Blotato worker — content created in Codex; Agentic OS at most health-checks it later); Lunula bid pipeline, FastWill outreach, and other business-ops workflows (owned by the separate apps CB is building). The skill-candidate inventory (`private/PHASE4-BACKLOG.md`) catalogs these but they are deferred/excluded by design.
 - [ ] Weekly self-review routine: agent reads its own audit log + failures, proposes routine/skill improvements as PRs to this repo.
 
 **Done when:** you've added two new capabilities without touching runner/bot/dashboard code.
